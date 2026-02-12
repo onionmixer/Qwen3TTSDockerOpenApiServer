@@ -1,0 +1,32 @@
+services:
+  qwen3-tts-api:
+    build:
+      context: .
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - MODEL_TYPE=${MODEL_TYPE:-1.7b}
+      - TTS_MODES=${TTS_MODES:-all}
+      - DEVICE=${DEVICE:-cuda}
+      - DTYPE=${DTYPE:-bfloat16}
+      - ATTN_IMPLEMENTATION=${ATTN_IMPLEMENTATION:-flash_attention_2}
+      - CUSTOM_VOICE_MODEL_PATH=/models/Qwen3-TTS-12Hz-1.7B-CustomVoice
+      - VOICE_DESIGN_MODEL_PATH=/models/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+      - VOICE_CLONE_MODEL_PATH=/models/Qwen3-TTS-12Hz-1.7B-Base
+      - CUSTOM_VOICE_0_6B_MODEL_PATH=/models/Qwen3-TTS-12Hz-0.6B-CustomVoice
+      - VOICE_CLONE_0_6B_MODEL_PATH=/models/Qwen3-TTS-12Hz-0.6B-Base
+      - REF_AUDIO_DIR=/models/ref_audio
+      - DEFAULT_SPEAKER=${DEFAULT_SPEAKER:-Vivian}
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-Auto}
+    volumes:
+      - ${MODEL_DIR}:/models:ro
+      - ${REF_AUDIO_DIR:-./ref_audio}:/models/ref_audio:ro
+    ports:
+      - "${API_PORT:-8080}:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
