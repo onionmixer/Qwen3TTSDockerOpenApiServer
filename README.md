@@ -50,8 +50,15 @@ OpenAI의 `/v1/audio/speech` API를 사용하는 클라이언트(Open WebUI, Cha
 
 ### 1. 모델 다운로드
 
+HuggingFace에서 필요한 모델을 다운로드합니다. 사용할 모드에 따라 필요한 모델만 받아도 됩니다.
+
 ```bash
 pip install huggingface_hub
+```
+
+**전체 모델 일괄 다운로드** (~18GB):
+
+```bash
 python -c "
 from huggingface_hub import snapshot_download
 for repo in [
@@ -68,21 +75,105 @@ for repo in [
 "
 ```
 
+**모드별 필요 모델:**
+
+| 모드 | 필요 모델 | 용량 |
+|------|-----------|------|
+| CustomVoice (1.7B) | `Qwen3-TTS-12Hz-1.7B-CustomVoice` | ~4.3GB |
+| CustomVoice (0.6B) | `Qwen3-TTS-12Hz-0.6B-CustomVoice` | ~2.4GB |
+| VoiceDesign (1.7B) | `Qwen3-TTS-12Hz-1.7B-VoiceDesign` | ~4.3GB |
+| VoiceClone (1.7B) | `Qwen3-TTS-12Hz-1.7B-Base` | ~4.3GB |
+| VoiceClone (0.6B) | `Qwen3-TTS-12Hz-0.6B-Base` | ~2.4GB |
+
+> Tokenizer (`Qwen3-TTS-Tokenizer-12Hz`, ~651MB)는 모든 모드에서 사용되며, 각 모델 디렉토리에 포함되어 있거나 자동으로 참조됩니다.
+
+**개별 다운로드 예시** (CustomVoice 1.7B만):
+
+```bash
+huggingface-cli download Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice \
+  --local-dir ./models/Qwen3-TTS-12Hz-1.7B-CustomVoice
+```
+
+다운로드 후 디렉토리 구조는 다음과 같아야 합니다:
+
+```
+models/
+├── Qwen3-TTS-12Hz-1.7B-CustomVoice/
+│   ├── config.json
+│   ├── model-00001-of-00002.safetensors
+│   ├── model-00002-of-00002.safetensors
+│   └── ...
+├── Qwen3-TTS-12Hz-1.7B-VoiceDesign/
+├── Qwen3-TTS-12Hz-1.7B-Base/
+├── Qwen3-TTS-12Hz-0.6B-CustomVoice/
+├── Qwen3-TTS-12Hz-0.6B-Base/
+└── Qwen3-TTS-Tokenizer-12Hz/
+```
+
 ### 2. Docker Compose 실행
+
+#### 2-1. 환경 설정
 
 ```bash
 cp .env.example .env
-# .env에서 MODEL_DIR을 모델 다운로드 경로로 설정
+```
 
+`.env` 파일에서 `MODEL_DIR`을 모델이 저장된 **절대 경로**로 설정합니다:
+
+```env
+# 모델 다운로드 경로 (필수)
+MODEL_DIR=/home/user/models
+
+# 사용할 모델 사이즈: 0.6b, 1.7b, both
+MODEL_TYPE=1.7b
+
+# 활성화할 TTS 모드: custom_voice, voice_design, voice_clone, all
+TTS_MODES=all
+
+# 서버 포트
+API_PORT=8080
+```
+
+`MODEL_DIR` 아래에 다운로드한 모델 디렉토리들이 있어야 합니다. Docker Compose에서 이 경로를 컨테이너 내부의 `/models`로 읽기 전용 마운트합니다:
+
+```
+호스트: ${MODEL_DIR}/Qwen3-TTS-12Hz-1.7B-CustomVoice/
+   ↓ volume mount
+컨테이너: /models/Qwen3-TTS-12Hz-1.7B-CustomVoice/
+```
+
+#### 2-2. 빌드 및 실행
+
+```bash
 docker compose up --build
 ```
+
+> **참고:** Dockerfile에서 [Qwen3-TTS 소스코드](https://github.com/QwenLM/Qwen3-TTS)를 빌드합니다. 프로젝트 루트에 `Qwen3-TTS/` 디렉토리가 필요합니다:
+> ```bash
+> git clone https://github.com/QwenLM/Qwen3-TTS.git
+> docker compose up --build
+> ```
+
+#### 2-3. VoiceClone 참조 오디오 마운트 (선택)
+
+VoiceClone 모드에서 파일 기반 참조 오디오를 사용하려면 `REF_AUDIO_DIR`도 설정합니다:
+
+```env
+REF_AUDIO_DIR=/home/user/ref_audio
+```
+
+이 디렉토리는 컨테이너 내부 `/models/ref_audio`로 마운트됩니다.
 
 ### 3. 로컬 실행 (Docker 없이)
 
 ```bash
-pip install -e /path/to/Qwen3-TTS
+# Qwen3-TTS 패키지 설치
+pip install /path/to/Qwen3-TTS
+
+# 서버 의존성 설치
 pip install -r requirements.txt
 
+# 환경변수 설정 후 실행
 export CUSTOM_VOICE_MODEL_PATH=./models/Qwen3-TTS-12Hz-1.7B-CustomVoice
 export MODEL_TYPE=1.7b
 export TTS_MODES=custom_voice
