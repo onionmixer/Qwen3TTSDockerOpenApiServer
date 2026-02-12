@@ -234,6 +234,63 @@ curl -X POST http://localhost:8080/v1/audio/speech \
 
 전체 목록은 [.env.example](.env.example) 참조.
 
+## GPU 호환성
+
+Qwen3-TTS가 의존하는 `transformers==4.57.3`은 `torch>=2.10`을 요구하며, PyTorch 2.10은 **CUDA Compute Capability 7.0 (Volta) 이상**만 지원합니다.
+
+### 지원 GPU
+
+| GPU 세대 | Compute Capability | 지원 여부 |
+|----------|-------------------|-----------|
+| Pascal (GTX 1080 Ti, TITAN Xp 등) | sm_61 | **미지원** |
+| Volta (V100) | sm_70 | 지원 |
+| Turing (RTX 2060~2080 Ti) | sm_75 | 지원 |
+| Ampere (RTX 3060~3090, A100) | sm_80, sm_86 | 지원 |
+| Ada Lovelace (RTX 4060~4090) | sm_89 | 지원 |
+| Hopper (H100) | sm_90 | 지원 |
+
+### VRAM 요구사항
+
+| 모델 | dtype | 예상 VRAM | 권장 GPU |
+|------|-------|-----------|----------|
+| 0.6B | bfloat16 | ~2GB | 8GB+ |
+| 1.7B | bfloat16 | ~4GB | 8GB+ |
+| 전체 (both + all) | bfloat16 | ~18GB | 24GB+ |
+
+### Pascal GPU (GTX 1080 Ti 등) 사용 시
+
+Pascal 세대 GPU에서는 CUDA 모드를 사용할 수 없습니다. 다음과 같이 **CPU 모드**로 실행할 수 있습니다:
+
+```env
+DEVICE=cpu
+DTYPE=float32
+ATTN_IMPLEMENTATION=sdpa
+```
+
+> **참고:** CPU 모드에서는 0.6B 모델 기준 문장당 약 10~15초가 소요됩니다. 1.7B 모델은 더 오래 걸릴 수 있으므로 0.6B 사용을 권장합니다.
+
+docker-compose.yml에서 CPU 모드로 실행하려면 `runtime: nvidia`와 `deploy.resources` 블록을 제거하고 환경변수를 수정합니다:
+
+```yaml
+services:
+  qwen3-tts-api:
+    build:
+      context: .
+    # runtime: nvidia  # 제거
+    environment:
+      - DEVICE=cpu
+      - DTYPE=float32
+      - ATTN_IMPLEMENTATION=sdpa
+      - MODEL_TYPE=0.6b
+      - TTS_MODES=custom_voice
+      # ... 기타 환경변수
+    volumes:
+      - ${MODEL_DIR}:/models:ro
+    ports:
+      - "${API_PORT:-8080}:8080"
+    # deploy 블록 제거
+```
+
 ## 프로젝트 구조
 
 ```
