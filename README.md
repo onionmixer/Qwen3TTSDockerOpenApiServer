@@ -459,7 +459,7 @@ cd finetuning_test
 python sft_12hz.py \
   --init_model_path ../models/Qwen3-TTS-12Hz-0.6B-Base \
   --output_model_path ./output \
-  --train_jsonl train_with_codes.jsonl \
+  --train_jsonl ../Qwen3-TTS/finetuning/train_with_codes.jsonl \
   --batch_size 2 \
   --lr 2e-5 \
   --num_epochs 3 \
