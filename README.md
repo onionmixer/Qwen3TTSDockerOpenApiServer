@@ -202,6 +202,7 @@ docker compose logs -f
 ```
 [TTS-custom_voice-1.7b] Model loaded successfully
 [TTS-custom_voice-1.7b] Speakers: ['aiden', 'dylan', 'eric', 'ono_anna', 'ryan', 'serena', 'sohee', 'uncle_fu', 'vivian']
+[TTS-voice_clone-1.7b] Model loaded successfully
 [Startup] TTS services ready
 Server ready at http://0.0.0.0:8080
 ```
@@ -265,6 +266,8 @@ curl -X POST http://localhost:8899/v1/audio/speech \
 > 참고: 0.6B 모델에서는 `instruct`가 무시됩니다.
 
 ### VoiceDesign (1.7B 전용)
+
+> **주의:** VoiceDesign을 사용하려면 `TTS_MODES`에 `voice_design`이 포함되어야 합니다. 기본 설정(`custom_voice,voice_clone`)에는 포함되어 있지 않으므로, `.env`에서 `TTS_MODES=custom_voice,voice_clone,voice_design` 또는 `TTS_MODES=all`로 변경하세요. 3개 모드 동시 로드에는 약 14GB VRAM이 필요합니다.
 
 ```bash
 curl -X POST http://localhost:8899/v1/audio/speech \
@@ -569,7 +572,9 @@ Qwen3TTSDockerOpenApiServer/
 ├── docker-compose.yml
 ├── requirements.txt
 ├── .env.example
-└── .dockerignore
+├── .dockerignore
+├── start.sh                    # Docker 컨테이너 시작 스크립트
+└── stop.sh                     # Docker 컨테이너 종료 스크립트
 ```
 
 ## 라이선스
