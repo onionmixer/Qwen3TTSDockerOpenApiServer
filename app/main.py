@@ -4,9 +4,11 @@ Qwen3-TTS OpenAI-Compatible API Server
 Main FastAPI application providing OpenAI-compatible TTS API.
 """
 
+import gc
 import time
 from contextlib import asynccontextmanager
 
+import torch
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -44,6 +46,17 @@ async def lifespan(app: FastAPI):
     yield
 
     print("\n[Shutdown] Cleaning up...")
+    for key, service in list(_tts_services.items()):
+        print(f"[Shutdown] Unloading {key}...")
+        if service.model is not None:
+            del service.model
+            service.model = None
+            service._loaded = False
+    _tts_services.clear()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    print("[Shutdown] GPU memory released")
 
 
 app = FastAPI(
