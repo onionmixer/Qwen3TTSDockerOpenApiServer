@@ -18,6 +18,9 @@ WORKDIR /workspace
 COPY Qwen3-TTS/ /opt/Qwen3-TTS/
 RUN pip install --no-cache-dir -e /opt/Qwen3-TTS/
 
+# Fix torchvision/torchaudio to match upgraded torch version
+RUN pip install --no-cache-dir --force-reinstall torchvision torchaudio
+
 # Install Flash Attention
 RUN MAX_JOBS=4 pip install -U flash-attn --no-build-isolation || \
     echo "Flash Attention installation failed, will use SDPA"
@@ -25,6 +28,9 @@ RUN MAX_JOBS=4 pip install -U flash-attn --no-build-isolation || \
 # Install application dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Fix numba compatibility with numpy>=2.x (must be last to avoid downgrade)
+RUN pip install --no-cache-dir -U "numba>=0.61" "setuptools<82"
 
 # Copy application code
 COPY app/ /workspace/app/

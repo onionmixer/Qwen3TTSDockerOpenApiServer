@@ -1,0 +1,10 @@
+.git
+.env
+.env.example
+models/
+ref_audio/
+__pycache__/
+*.pyc
+*.md
+.claude/
+PLAN_*.md
