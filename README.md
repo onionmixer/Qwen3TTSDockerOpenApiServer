@@ -641,6 +641,7 @@ Qwen3TTSDockerOpenApiServer/
 ├── requirements.txt
 ├── .env.example
 ├── .dockerignore
+├── test_tts_multilang.sh       # 다국어 TTS 테스트 스크립트
 ├── start.sh                    # Docker 컨테이너 시작 스크립트
 └── stop.sh                     # Docker 컨테이너 종료 스크립트
 ```
