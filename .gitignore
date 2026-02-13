@@ -31,3 +31,5 @@ Qwen3-TTS/
 finetuning_test/output_*/
 finetuning_test/data/
 finetuning_test/*.jsonl
+
+memo.txt
