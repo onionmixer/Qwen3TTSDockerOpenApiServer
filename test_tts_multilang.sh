@@ -11,9 +11,7 @@
 #   onyx->Uncle_Fu, nova->Ono_Anna, shimmer->Sohee
 #
 
-API_URL="http://192.168.1.16:8899/v1/audio/speech"
-#API_URL="http://192.168.1.20:8899/v1/audio/speech"
-#API_URL="http://192.168.1.135:8899/v1/audio/speech"
+API_URL="http://localhost:8899/v1/audio/speech"
 MODEL="qwen3-tts-1.7b"
 VOICE="vivian"
 OUTPUT_DIR="./tts_output"
