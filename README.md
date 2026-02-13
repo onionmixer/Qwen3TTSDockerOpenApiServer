@@ -70,16 +70,44 @@ Qwen3-TTS는 3가지 TTS 모드를 제공하며, 각 모드는 별도의 모델 
 | `tts-1` | CustomVoice | 0.6B |
 | `tts-1-hd` | CustomVoice | 1.7B |
 
-## OpenAI 음성 매핑
+## 사용 가능한 음성
 
-| OpenAI voice | Qwen3 speaker | 설명 |
-|-------------|---------------|------|
-| `alloy` | `Vivian` | 밝고 또렷한 여성 |
-| `echo` | `Ryan` | 역동적인 남성 |
-| `fable` | `Serena` | 따뜻하고 부드러운 여성 |
-| `onyx` | `Uncle_Fu` | 깊고 낮은 남성 |
-| `nova` | `Ono_Anna` | 발랄한 일본어 여성 |
-| `shimmer` | `Sohee` | 감성적인 한국어 여성 |
+### 내장 스피커 (CustomVoice)
+
+| voice | 성별 | 설명 | OpenAI 별칭 |
+|-------|------|------|-------------|
+| `vivian` | 여성 | 밝고 또렷한 음성 **(기본값)** | `alloy` |
+| `serena` | 여성 | 따뜻하고 부드러운 음성 | `fable` |
+| `sohee` | 여성 | 감성적인 한국어 음성 | `shimmer` |
+| `ono_anna` | 여성 | 발랄한 일본어 음성 | `nova` |
+| `ryan` | 남성 | 역동적인 음성 | `echo` |
+| `eric` | 남성 | 차분한 음성 | - |
+| `dylan` | 남성 | 젊은 남성 음성 | - |
+| `aiden` | 남성 | 남성 음성 | - |
+| `uncle_fu` | 남성 | 깊고 낮은 음성 | `onyx` |
+
+> 음성 이름은 대소문자를 구분하지 않습니다. `vivian`, `Vivian`, `VIVIAN` 모두 동일하게 처리됩니다.
+
+### OpenAI 호환 별칭
+
+OpenAI TTS API의 음성 이름(`alloy`, `echo` 등)을 그대로 사용하면 위 내장 스피커로 자동 매핑됩니다:
+
+| OpenAI voice | → Qwen3 speaker |
+|-------------|-----------------|
+| `alloy` | Vivian |
+| `echo` | Ryan |
+| `fable` | Serena |
+| `onyx` | Uncle_Fu |
+| `nova` | Ono_Anna |
+| `shimmer` | Sohee |
+
+### 음성 목록 API
+
+현재 로드된 모델에서 사용 가능한 음성을 조회할 수 있습니다:
+
+```bash
+curl http://localhost:8899/v1/audio/voices
+```
 
 ## 빠른 시작
 
@@ -183,7 +211,22 @@ DTYPE=bfloat16
 ATTN_IMPLEMENTATION=flash_attention_2
 ```
 
-> `MODEL_DIR` 아래에 다운로드한 모델 디렉토리들이 있어야 합니다. Docker Compose에서 이 경로를 컨테이너 내부 `/models`로 읽기 전용 마운트합니다.
+> `MODEL_DIR` 아래에 다운로드한 모델 디렉토리들이 있어야 합니다.
+
+#### Docker 경로 매핑
+
+Docker Compose는 호스트의 디렉토리와 포트를 컨테이너 내부로 매핑합니다:
+
+| .env 변수 | 호스트 (외부) | 컨테이너 (내부) | 용도 |
+|-----------|---------------|----------------|------|
+| `MODEL_DIR` | `/home/user/project/models` | `/models` (읽기 전용) | 모델 파일 |
+| `REF_AUDIO_DIR` | `./ref_audio` | `/ref_audio` (읽기 전용) | VoiceClone 참조 오디오 |
+| `API_PORT` | `8899` (호스트 포트) | `8080` (내부 포트) | API 접속 포트 |
+
+**주의사항:**
+- `.env`의 `MODEL_DIR`, `REF_AUDIO_DIR`, `API_PORT`는 **호스트 측 경로/포트**입니다
+- `docker-compose.yml`에 하드코딩된 `CUSTOM_VOICE_MODEL_PATH=/models/...` 등은 **컨테이너 내부 경로**이며, 일반적으로 수정할 필요 없습니다
+- 호스트의 `MODEL_DIR/Qwen3-TTS-12Hz-1.7B-CustomVoice/` → 컨테이너 내부 `/models/Qwen3-TTS-12Hz-1.7B-CustomVoice/`로 자동 매핑됩니다
 
 #### 3-2. 빌드 및 실행
 
@@ -323,7 +366,7 @@ response.stream_to_file("output.wav")
 
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
-| `MODEL_DIR` | - | 모델 디렉토리 경로 (필수) |
+| `MODEL_DIR` | - | 모델 디렉토리 호스트 경로 (필수, 컨테이너 내부 `/models`로 마운트) |
 | `MODEL_TYPE` | `1.7b` | 로드할 모델 사이즈 (`0.6b`, `1.7b`, `both`) |
 | `TTS_MODES` | `custom_voice,voice_clone` | 활성화할 모드 (`custom_voice`, `voice_design`, `voice_clone`, `all`) |
 | `DEVICE` | `cuda` | PyTorch 디바이스 (`cuda`, `cpu`) |
@@ -331,8 +374,8 @@ response.stream_to_file("output.wav")
 | `ATTN_IMPLEMENTATION` | `flash_attention_2` | Attention 구현 (`flash_attention_2`, `sdpa`) |
 | `DEFAULT_SPEAKER` | `Vivian` | 기본 스피커 |
 | `DEFAULT_LANGUAGE` | `Auto` | 기본 언어 |
-| `API_PORT` | `8899` | 서버 포트 |
-| `REF_AUDIO_DIR` | `./ref_audio` | VoiceClone 참조 오디오 디렉토리 |
+| `API_PORT` | `8899` | 호스트 접속 포트 (컨테이너 내부는 8080 고정) |
+| `REF_AUDIO_DIR` | `./ref_audio` | VoiceClone 참조 오디오 디렉토리 (호스트 경로) |
 
 전체 목록은 [.env.example](.env.example) 참조.
 
@@ -534,9 +577,15 @@ sf.write("output.wav", wavs[0], sr)
 
 ### 파인튜닝 모델을 API 서버에서 사용
 
-파인튜닝된 체크포인트를 `models/` 디렉토리에 복사하고, `docker-compose.yml`의 환경변수를 수정하여 사용할 수 있습니다:
+파인튜닝된 체크포인트를 호스트의 `MODEL_DIR` 디렉토리에 복사하면, 컨테이너 내부 `/models/` 아래로 자동 마운트됩니다. `docker-compose.yml`에서 모델 경로를 변경합니다:
+
+```bash
+# 호스트에서: 체크포인트를 MODEL_DIR로 복사
+cp -r finetuning_test/output/checkpoint-epoch-2 /home/user/project/models/my-finetuned-model
+```
 
 ```yaml
+# docker-compose.yml (컨테이너 내부 경로로 지정)
 environment:
   - CUSTOM_VOICE_MODEL_PATH=/models/my-finetuned-model
 ```
