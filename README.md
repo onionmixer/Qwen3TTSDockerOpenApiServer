@@ -435,7 +435,7 @@ cd Qwen3-TTS/finetuning
 
 python prepare_data.py \
   --device cuda:0 \
-  --tokenizer_model_path ../models/Qwen3-TTS-Tokenizer-12Hz \
+  --tokenizer_model_path ../../models/Qwen3-TTS-Tokenizer-12Hz \
   --input_jsonl train_raw.jsonl \
   --output_jsonl train_with_codes.jsonl
 ```
@@ -450,9 +450,28 @@ huggingface-cli download Qwen/Qwen3-TTS-Tokenizer-12Hz \
 
 #### 3단계: 파인튜닝 실행
 
+> **0.6B 모델 사용 시:** 원본 `Qwen3-TTS/finetuning/sft_12hz.py`는 1.7B 전용입니다. 0.6B 모델에서는 차원 불일치 에러가 발생하므로, 본 프로젝트의 수정된 스크립트(`finetuning_test/sft_12hz.py`)를 사용하세요. 자세한 내용은 아래 [0.6B 모델 학습 시 주의사항](#06b-모델-학습-시-주의사항)을 참조하세요.
+
 ```bash
+# 0.6B: 수정된 스크립트 사용 (프로젝트 루트에서)
+cd finetuning_test
+
 python sft_12hz.py \
   --init_model_path ../models/Qwen3-TTS-12Hz-0.6B-Base \
+  --output_model_path ./output \
+  --train_jsonl train_with_codes.jsonl \
+  --batch_size 2 \
+  --lr 2e-5 \
+  --num_epochs 3 \
+  --speaker_name my_speaker
+```
+
+```bash
+# 1.7B: 원본 스크립트 사용 (24GB+ VRAM 필요)
+cd Qwen3-TTS/finetuning
+
+python sft_12hz.py \
+  --init_model_path ../../models/Qwen3-TTS-12Hz-1.7B-Base \
   --output_model_path ./output \
   --train_jsonl train_with_codes.jsonl \
   --batch_size 2 \

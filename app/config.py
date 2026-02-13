@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # Model selection
     model_type: str = "1.7b"  # "0.6b", "1.7b", "both"
-    tts_modes: str = "custom_voice"  # "custom_voice", "voice_design", "voice_clone", "all"
+    tts_modes: str = "custom_voice,voice_clone"  # "custom_voice", "voice_design", "voice_clone", "all"
 
     # Reference audio directory for voice clone
     ref_audio_dir: str = "/models/ref_audio"
