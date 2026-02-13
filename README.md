@@ -23,6 +23,7 @@ OpenAI의 `/v1/audio/speech` API를 사용하는 클라이언트(Open WebUI, Cha
 | **듀얼 모델** | 0.6B / 1.7B 동시 로드 가능 |
 | **OpenAI 호환** | `tts-1`, `tts-1-hd` 모델명 및 `alloy`~`shimmer` 음성 매핑 |
 | **다중 포맷** | WAV, MP3, Opus, AAC, FLAC, PCM 출력 |
+| **음성 파인튜닝** | Base 모델로 커스텀 화자 학습 (0.6B/1.7B) |
 
 ## API 엔드포인트
 
@@ -67,7 +68,7 @@ HuggingFace에서 필요한 모델을 다운로드합니다. 사용할 모드에
 pip install huggingface_hub
 ```
 
-**전체 모델 일괄 다운로드** (~18GB):
+**전체 모델 일괄 다운로드** (~18.6GB):
 
 ```bash
 python -c "
@@ -78,6 +79,7 @@ for repo in [
     'Qwen/Qwen3-TTS-12Hz-1.7B-Base',
     'Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice',
     'Qwen/Qwen3-TTS-12Hz-0.6B-Base',
+    'Qwen/Qwen3-TTS-Tokenizer-12Hz',
 ]:
     name = repo.split('/')[-1]
     snapshot_download(repo, local_dir=f'models/{name}')
@@ -94,8 +96,9 @@ for repo in [
 | VoiceDesign (1.7B) | `Qwen3-TTS-12Hz-1.7B-VoiceDesign` | ~4.3GB |
 | VoiceClone (1.7B) | `Qwen3-TTS-12Hz-1.7B-Base` | ~4.3GB |
 | VoiceClone (0.6B) | `Qwen3-TTS-12Hz-0.6B-Base` | ~2.4GB |
+| 파인튜닝 (공통) | `Qwen3-TTS-Tokenizer-12Hz` | ~651MB |
 
-> Tokenizer는 각 모델 내부에 포함되어 있어 별도 다운로드 불필요합니다.
+> 추론용 Tokenizer는 각 모델 내부에 포함되어 있어 별도 다운로드 불필요합니다. 파인튜닝 시에만 `Qwen3-TTS-Tokenizer-12Hz`가 필요합니다.
 
 **개별 다운로드 예시** (CustomVoice 1.7B만):
 
@@ -110,13 +113,14 @@ huggingface-cli download Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice \
 models/
 ├── Qwen3-TTS-12Hz-1.7B-CustomVoice/
 │   ├── config.json
-│   ├── model-00001-of-00002.safetensors
-│   ├── model-00002-of-00002.safetensors
+│   ├── model.safetensors
+│   ├── speech_tokenizer/
 │   └── ...
 ├── Qwen3-TTS-12Hz-1.7B-VoiceDesign/  (선택)
 ├── Qwen3-TTS-12Hz-1.7B-Base/         (선택)
 ├── Qwen3-TTS-12Hz-0.6B-CustomVoice/  (선택)
-└── Qwen3-TTS-12Hz-0.6B-Base/         (선택)
+├── Qwen3-TTS-12Hz-0.6B-Base/         (선택)
+└── Qwen3-TTS-Tokenizer-12Hz/         (파인튜닝 시 필요)
 ```
 
 ### 2. Qwen3-TTS 소스 준비
@@ -145,7 +149,7 @@ MODEL_DIR=/home/user/project/models
 MODEL_TYPE=1.7b
 
 # 활성화할 모드: custom_voice, voice_design, voice_clone, all
-TTS_MODES=custom_voice
+TTS_MODES=all
 
 # 서버 포트 (기본: 8899)
 API_PORT=8899
@@ -295,7 +299,7 @@ response.stream_to_file("output.wav")
 |------|--------|------|
 | `MODEL_DIR` | - | 모델 디렉토리 경로 (필수) |
 | `MODEL_TYPE` | `1.7b` | 로드할 모델 사이즈 (`0.6b`, `1.7b`, `both`) |
-| `TTS_MODES` | `custom_voice` | 활성화할 모드 (`custom_voice`, `voice_design`, `voice_clone`, `all`) |
+| `TTS_MODES` | `all` | 활성화할 모드 (`custom_voice`, `voice_design`, `voice_clone`, `all`) |
 | `DEVICE` | `cuda` | PyTorch 디바이스 (`cuda`, `cpu`) |
 | `DTYPE` | `bfloat16` | 모델 정밀도 (`bfloat16`, `float16`) |
 | `ATTN_IMPLEMENTATION` | `flash_attention_2` | Attention 구현 (`flash_attention_2`, `sdpa`) |
@@ -532,6 +536,7 @@ Qwen3TTSDockerOpenApiServer/
 │   ├── sft_12hz.py              # 수정된 학습 스크립트 (0.6B 호환)
 │   ├── dataset.py               # 학습 데이터셋 클래스
 │   ├── generate_samples.py      # 샘플 데이터 생성 도구
+│   ├── test_inference.py        # 파인튜닝 모델 추론 테스트
 │   └── data/                    # 샘플 오디오 데이터
 ├── Qwen3-TTS/                   # Qwen3-TTS 소스 (git clone)
 ├── models/                      # 다운로드한 모델 (git 미추적)
