@@ -35,6 +35,29 @@ OpenAI의 `/v1/audio/speech` API를 사용하는 클라이언트(Open WebUI, Cha
 | `GET` | `/health` | 서비스 상태 확인 |
 | `GET` | `/docs` | Swagger UI |
 
+## TTS 모드 비교
+
+Qwen3-TTS는 3가지 TTS 모드를 제공하며, 각 모드는 별도의 모델 파일을 사용합니다.
+
+| | **CustomVoice** | **VoiceDesign** | **VoiceClone** (Base) |
+|---|---|---|---|
+| **용도** | 내장 화자로 TTS | 자연어로 새 음성 생성 | 참조 오디오로 음성 복제 |
+| **입력** | 텍스트 + 화자 이름 | 텍스트 + 음성 설명문 | 텍스트 + 참조 오디오(WAV) |
+| **화자 선택** | 9종 내장 (Vivian, Ryan 등) | 없음 (설명문으로 생성) | 없음 (참조 오디오로 결정) |
+| **1.7B 모델** | `Qwen3-TTS-12Hz-1.7B-CustomVoice` | `Qwen3-TTS-12Hz-1.7B-VoiceDesign` | `Qwen3-TTS-12Hz-1.7B-Base` |
+| **0.6B 모델** | `Qwen3-TTS-12Hz-0.6B-CustomVoice` | 없음 (1.7B만) | `Qwen3-TTS-12Hz-0.6B-Base` |
+| **VRAM (1.7B)** | ~4.4GB | ~4.4GB | ~4.4GB |
+| **파인튜닝** | X (파인튜닝 결과물) | X | O (파인튜닝 원본) |
+| **OpenAI 호환** | O (`tts-1`, `tts-1-hd`, `alloy` 등) | X (확장 API) | X (확장 API) |
+
+> **VRAM 참고:** 각 모드는 별도의 모델을 GPU에 로드합니다. 1.7B 모델 1개당 ~4.4GB VRAM을 사용하므로, 12GB GPU에서는 최대 2개 모드까지 동시 사용 가능합니다.
+
+**모드별 사용 예시:**
+
+- **CustomVoice**: 가장 일반적인 TTS. OpenAI 호환 클라이언트(Open WebUI 등)에서 사용. `instruct`로 스타일 지시 가능 ("밝고 행복한 톤으로")
+- **VoiceDesign**: 자연어 설명으로 원하는 음성 특성 지정 ("A deep, warm male voice"). 매번 다른 음성이 생성될 수 있음
+- **VoiceClone**: 참조 오디오의 음성을 복제하여 새 텍스트를 읽음. 파인튜닝의 시작점이 되어 CustomVoice 모델로 변환 가능
+
 ## 모델 이름 매핑
 
 | model 값 | 모드 | 사이즈 |
@@ -149,7 +172,7 @@ MODEL_DIR=/home/user/project/models
 MODEL_TYPE=1.7b
 
 # 활성화할 모드: custom_voice, voice_design, voice_clone, all
-TTS_MODES=all
+TTS_MODES=custom_voice,voice_clone
 
 # 서버 포트 (기본: 8899)
 API_PORT=8899
@@ -299,7 +322,7 @@ response.stream_to_file("output.wav")
 |------|--------|------|
 | `MODEL_DIR` | - | 모델 디렉토리 경로 (필수) |
 | `MODEL_TYPE` | `1.7b` | 로드할 모델 사이즈 (`0.6b`, `1.7b`, `both`) |
-| `TTS_MODES` | `all` | 활성화할 모드 (`custom_voice`, `voice_design`, `voice_clone`, `all`) |
+| `TTS_MODES` | `custom_voice,voice_clone` | 활성화할 모드 (`custom_voice`, `voice_design`, `voice_clone`, `all`) |
 | `DEVICE` | `cuda` | PyTorch 디바이스 (`cuda`, `cpu`) |
 | `DTYPE` | `bfloat16` | 모델 정밀도 (`bfloat16`, `float16`) |
 | `ATTN_IMPLEMENTATION` | `flash_attention_2` | Attention 구현 (`flash_attention_2`, `sdpa`) |
@@ -337,12 +360,14 @@ response.stream_to_file("output.wav")
 
 | 구성 | 예상 VRAM | 권장 GPU |
 |------|-----------|----------|
-| 1.7B CustomVoice | ~4.5GB | 8GB+ |
-| 0.6B CustomVoice | ~2.5GB | 6GB+ |
+| 1.7B CustomVoice 단독 | ~4.5GB | 8GB+ |
+| 1.7B CustomVoice + VoiceClone (기본값) | **~9.5GB** | **12GB+** |
+| 1.7B CustomVoice + VoiceDesign | ~9.0GB | 12GB+ |
+| 0.6B CustomVoice 단독 | ~2.5GB | 6GB+ |
 | 1.7B 전체 모드 (custom+design+clone) | ~13.5GB | 24GB+ |
 | 0.6B + 1.7B 전체 | ~18.5GB | 24GB+ |
 
-> **검증 환경:** RTX 3080 Ti (12GB) + 1.7B CustomVoice bfloat16 = VRAM 4,440 MiB 사용 (여유 ~6.8GB)
+> **검증 환경:** RTX 3080 Ti (12GB) + 1.7B CustomVoice + VoiceClone = VRAM 9,702 MiB 사용 (여유 ~2.5GB)
 
 ### Pascal GPU (GTX 1080 Ti 등) - CPU 모드
 

@@ -6,7 +6,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - MODEL_TYPE=${MODEL_TYPE:-1.7b}
-      - TTS_MODES=${TTS_MODES:-all}
+      - TTS_MODES=${TTS_MODES:-custom_voice,voice_clone}
       - DEVICE=${DEVICE:-cuda}
       - DTYPE=${DTYPE:-bfloat16}
       - ATTN_IMPLEMENTATION=${ATTN_IMPLEMENTATION:-flash_attention_2}
