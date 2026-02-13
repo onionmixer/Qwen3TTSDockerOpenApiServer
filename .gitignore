@@ -32,4 +32,5 @@ finetuning_test/output_*/
 finetuning_test/data/
 finetuning_test/*.jsonl
 
+tts_output/
 memo.txt
