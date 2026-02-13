@@ -26,3 +26,8 @@ env/
 /models/
 ref_audio/
 Qwen3-TTS/
+
+# Fine-tuning outputs
+finetuning_test/output_*/
+finetuning_test/data/
+finetuning_test/*.jsonl

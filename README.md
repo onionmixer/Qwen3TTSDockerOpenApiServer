@@ -11,7 +11,7 @@ OpenAI의 `/v1/audio/speech` API를 사용하는 클라이언트(Open WebUI, Cha
 - 12Hz 코덱 기반, CustomVoice / VoiceDesign / VoiceClone 3가지 모드 지원
 - 0.6B (경량) 및 1.7B (고품질) 두 가지 모델 사이즈 제공
 
-본 프로젝트는 Qwen3-TTS의 추론 API를 래핑하여 OpenAI 호환 REST API로 노출하는 **서빙 레이어**입니다. 모델 자체의 학습이나 수정은 포함하지 않습니다.
+본 프로젝트는 Qwen3-TTS의 추론 API를 래핑하여 OpenAI 호환 REST API로 노출하는 **서빙 레이어**이며, **커스텀 음성 파인튜닝** 파이프라인도 포함합니다.
 
 ## 지원 기능
 
@@ -353,6 +353,167 @@ MODEL_TYPE=0.6b
 
 > CPU 모드에서는 0.6B 모델 기준 문장당 약 10~15초 소요. 1.7B는 0.6B 사용 권장.
 
+## 음성 파인튜닝 (Custom Voice Fine-tuning)
+
+Qwen3-TTS Base 모델을 사용하여 특정 화자의 음성으로 파인튜닝할 수 있습니다. 파인튜닝된 모델은 CustomVoice 모드로 변환되어, 참조 오디오 없이도 학습된 화자의 음성으로 TTS를 수행합니다.
+
+### 파인튜닝 개요
+
+| 항목 | 설명 |
+|------|------|
+| **지원 모델** | 1.7B-Base (권장), 0.6B-Base |
+| **학습 방식** | 단일 화자 SFT (Supervised Fine-Tuning) |
+| **출력** | CustomVoice 타입 모델 (참조 오디오 불필요) |
+| **필요 데이터** | WAV 오디오 + 텍스트 전사 (JSONL) |
+| **VRAM 요구량** | 0.6B: ~6GB (12GB GPU OK), 1.7B: **24GB+ 필요** |
+
+> **RTX 3080 Ti (12GB) 검증 결과:** 0.6B-Base 모델 파인튜닝 성공 (batch_size=2). 1.7B-Base는 모델만으로 ~9.8GB를 사용하여 optimizer 상태를 위한 VRAM이 부족합니다.
+
+### VRAM별 권장 설정
+
+| GPU VRAM | 모델 | batch_size | 비고 |
+|----------|------|------------|------|
+| 12GB (RTX 3080 Ti 등) | 0.6B-Base | 2 | 기본 AdamW 사용 가능 |
+| 16GB (RTX 4080 등) | 0.6B-Base | 4~8 | 여유 있음 |
+| 24GB+ (RTX 3090, A100 등) | 1.7B-Base | 2~8 | 권장, 고품질 |
+
+### 파인튜닝 파이프라인
+
+#### 1단계: 학습 데이터 준비
+
+JSONL 형식으로 학습 데이터를 준비합니다. 각 행에는 오디오 파일 경로, 텍스트 전사, 참조 오디오 경로가 필요합니다.
+
+```jsonl
+{"audio":"./data/utt0001.wav","text":"안녕하세요, 오늘 날씨가 좋습니다.","ref_audio":"./data/ref.wav"}
+{"audio":"./data/utt0002.wav","text":"She said she would be here by noon.","ref_audio":"./data/ref.wav"}
+```
+
+**데이터 요구사항:**
+- 오디오: 24kHz WAV 형식 (mono)
+- `ref_audio`: 모든 샘플에 동일한 참조 오디오 사용 권장 (화자 일관성 향상)
+- 최소 50~100개 이상의 utterance 권장 (적은 데이터로는 품질 저하)
+- 텍스트는 해당 오디오의 정확한 전사여야 함
+
+#### 2단계: 오디오 코드 추출 (prepare_data)
+
+Qwen3-TTS Tokenizer를 사용하여 오디오를 이산 코드(discrete codes)로 변환합니다.
+
+```bash
+cd Qwen3-TTS/finetuning
+
+python prepare_data.py \
+  --device cuda:0 \
+  --tokenizer_model_path ../models/Qwen3-TTS-Tokenizer-12Hz \
+  --input_jsonl train_raw.jsonl \
+  --output_jsonl train_with_codes.jsonl
+```
+
+> Tokenizer를 별도 다운로드하지 않았다면, Base 모델 경로를 사용해도 됩니다 (내부 `speech_tokenizer` 포함).
+
+**별도 다운로드가 필요한 경우:**
+```bash
+huggingface-cli download Qwen/Qwen3-TTS-Tokenizer-12Hz \
+  --local-dir ./models/Qwen3-TTS-Tokenizer-12Hz
+```
+
+#### 3단계: 파인튜닝 실행
+
+```bash
+python sft_12hz.py \
+  --init_model_path ../models/Qwen3-TTS-12Hz-0.6B-Base \
+  --output_model_path ./output \
+  --train_jsonl train_with_codes.jsonl \
+  --batch_size 2 \
+  --lr 2e-5 \
+  --num_epochs 3 \
+  --speaker_name my_speaker
+```
+
+**주요 파라미터:**
+
+| 파라미터 | 기본값 | 설명 |
+|----------|--------|------|
+| `--init_model_path` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | 초기 모델 경로 |
+| `--batch_size` | 2 | 배치 크기 (VRAM에 맞게 조절) |
+| `--lr` | 2e-5 | 학습률 |
+| `--num_epochs` | 3 | 학습 에폭 수 |
+| `--speaker_name` | `speaker_test` | 커스텀 스피커 이름 |
+
+**학습 진행 시 출력 예시:**
+```
+Epoch 0 | Step 0 | Loss: 13.8789
+Epoch 1 | Step 0 | Loss: 8.5651
+Epoch 2 | Step 0 | Loss: 6.3911
+```
+
+체크포인트는 `output/checkpoint-epoch-{N}/` 에 저장됩니다.
+
+#### 4단계: 추론 테스트
+
+파인튜닝된 체크포인트에서 음성을 생성합니다.
+
+```python
+import torch
+import soundfile as sf
+from qwen_tts import Qwen3TTSModel
+
+device = "cuda:0"
+tts = Qwen3TTSModel.from_pretrained(
+    "output/checkpoint-epoch-2",
+    device_map=device,
+    dtype=torch.bfloat16,
+    attn_implementation="sdpa",  # flash_attention_2 if available
+)
+
+wavs, sr = tts.generate_custom_voice(
+    text="안녕하세요, 파인튜닝된 음성입니다.",
+    speaker="my_speaker",
+)
+sf.write("output.wav", wavs[0], sr)
+```
+
+### 파인튜닝 팁
+
+- **데이터 양**: 최소 50~100 utterance 이상 권장. 8개 샘플로는 일부 언어에서 품질 저하 발생 확인
+- **참조 오디오**: 모든 학습 샘플에 동일한 ref_audio 사용 시 화자 일관성 향상
+- **에폭 수**: 데이터가 적으면 3~5 에폭, 데이터가 많으면 10+ 에폭 권장
+- **학습률**: 대규모 데이터셋(1000+)은 2e-6, 소규모(~100)는 2e-5 권장
+- **0.6B vs 1.7B**: 0.6B는 12GB GPU에서 학습 가능하나 품질은 1.7B 대비 낮음. 충분한 VRAM(24GB+)이 있으면 1.7B 권장
+- **Flash Attention 미설치 시**: `sdpa`로 자동 fallback. Docker 환경에서는 Flash Attention 2 포함
+
+### 파인튜닝 모델을 API 서버에서 사용
+
+파인튜닝된 체크포인트를 `models/` 디렉토리에 복사하고, `docker-compose.yml`의 환경변수를 수정하여 사용할 수 있습니다:
+
+```yaml
+environment:
+  - CUSTOM_VOICE_MODEL_PATH=/models/my-finetuned-model
+```
+
+파인튜닝된 모델은 CustomVoice 타입으로 변환되므로, `qwen3-tts-1.7b` 또는 `qwen3-tts-0.6b` 모델명으로 요청하면 됩니다.
+
+```bash
+curl -X POST http://localhost:8899/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model":"qwen3-tts-0.6b","input":"안녕하세요","voice":"my_speaker"}' \
+  --output output.wav
+```
+
+### 0.6B 모델 학습 시 주의사항
+
+공식 `sft_12hz.py` 스크립트는 1.7B 모델 기준으로 작성되어 있어, 0.6B 모델에서는 `text_hidden_size`(2048)와 `hidden_size`(1024) 차이로 인한 차원 불일치 에러가 발생합니다. 이를 해결하려면 학습 스크립트에서 text_embedding에 `text_projection`을 적용해야 합니다:
+
+```python
+# 원본 (1.7B 전용)
+input_text_embedding = model.talker.model.text_embedding(input_text_ids) * text_embedding_mask
+
+# 수정 (0.6B 호환)
+raw_text_embedding = model.talker.model.text_embedding(input_text_ids)
+input_text_embedding = model.talker.text_projection(raw_text_embedding) * text_embedding_mask
+```
+
+본 프로젝트의 `finetuning_test/sft_12hz.py`에는 이 수정이 적용되어 있습니다.
+
 ## 프로젝트 구조
 
 ```
@@ -367,6 +528,11 @@ Qwen3TTSDockerOpenApiServer/
 │   │   └── tts_service.py       # Qwen3TTSModel 래핑, 추론, 오디오 변환
 │   └── models/
 │       └── tts_models.py        # TTSRequest, VoiceInfo Pydantic 스키마
+├── finetuning_test/             # 파인튜닝 테스트 (0.6B 검증 완료)
+│   ├── sft_12hz.py              # 수정된 학습 스크립트 (0.6B 호환)
+│   ├── dataset.py               # 학습 데이터셋 클래스
+│   ├── generate_samples.py      # 샘플 데이터 생성 도구
+│   └── data/                    # 샘플 오디오 데이터
 ├── Qwen3-TTS/                   # Qwen3-TTS 소스 (git clone)
 ├── models/                      # 다운로드한 모델 (git 미추적)
 ├── Dockerfile
